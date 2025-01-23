@@ -49,22 +49,22 @@ class CLIFlags(argparse.Namespace):
 
 def parse_cli_flags(arguments: list[str]) -> CLIFlags:
     parser = argparse.ArgumentParser(
-        prog="BallsDex bot", description="Collect and exchange countryballs on Discord"
+        prog="BallsDex bot", description="Collect and exchange countryballs on Discord."
     )
     parser.add_argument("--version", "-V", action="store_true", help="Display the bot's version")
     parser.add_argument(
-        "--config-file", type=Path, help="Set the path to config.yml", default=Path("./config.yml")
+        "--config-file", type=Path, help="Set the path to config.yml.", default=Path("./config.yml")
     )
     parser.add_argument(
         "--reset-settings",
         action="store_true",
-        help="Reset the config file with the latest default configuration",
+        help="Reset the config file with the latest default configuration.",
     )
-    parser.add_argument("--disable-rich", action="store_true", help="Disable rich log format")
+    parser.add_argument("--disable-rich", action="store_true", help="Disable rich log format.")
     parser.add_argument(
         "--disable-message-content",
         action="store_true",
-        help="Disable usage of message content intent through the bot",
+        help="Disable usage of message content intent through the bot.",
     )
     parser.add_argument(
         "--disable-time-check",
@@ -79,8 +79,8 @@ def parse_cli_flags(arguments: list[str]) -> CLIFlags:
         "avoids ratelimits, but risks of having desynced commands after updates. This is always "
         "enabled with clustering.",
     )
-    parser.add_argument("--debug", action="store_true", help="Enable debug logs")
-    parser.add_argument("--dev", action="store_true", help="Enable developer mode")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logs.")
+    parser.add_argument("--dev", action="store_true", help="Enable developer mode.")
     args = parser.parse_args(arguments, namespace=CLIFlags())
     return args
 
@@ -191,7 +191,7 @@ async def shutdown_handler(bot: BallsDexBot, signal_type: str | None = None):
 
 def global_exception_handler(bot: BallsDexBot, loop: asyncio.AbstractEventLoop, context: dict):
     """
-    Logs unhandled exceptions in other tasks
+    Logs unhandled exceptions in other tasks.
     """
     exc = context.get("exception")
     # These will get handled later when it *also* kills loop.run_forever
@@ -219,7 +219,7 @@ def bot_exception_handler(bot: BallsDexBot, bot_task: asyncio.Future):
     except (SystemExit, KeyboardInterrupt, asyncio.CancelledError):
         pass  # Handled by the global_exception_handler, or cancellation
     except Exception as exc:
-        log.critical("The main bot task didn't handle an exception and has crashed", exc_info=exc)
+        log.critical("The main bot task didn't handle an exception and has crashed.", exc_info=exc)
         log.warning("Attempting to die as gracefully as possible...")
         asyncio.create_task(shutdown_handler(bot))
 
