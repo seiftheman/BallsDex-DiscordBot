@@ -467,7 +467,7 @@ class BallsDexBot(commands.AutoShardedBot):
 
         if isinstance(error, app_commands.TransformerError):
             await send("One of the arguments provided cannot be parsed.")
-            log.debug("Failed running converter", exc_info=error)
+            log.debug("Failed running converter.", exc_info=error)
             return
 
         if isinstance(error, app_commands.CommandInvokeError):
@@ -477,7 +477,7 @@ class BallsDexBot(commands.AutoShardedBot):
                 await send("The bot does not have the permission to do something.")
                 # log to know where permissions are lacking
                 log.warning(
-                    f"Missing permissions for app command {interaction.command.name}",
+                    f"Missing permissions for app command {interaction.command.name}.",
                     exc_info=error.original,
                 )
                 return
@@ -493,7 +493,7 @@ class BallsDexBot(commands.AutoShardedBot):
                 # still including traceback because it may be a programming error
 
             log.error(
-                f"Error in slash command {interaction.command.name}", exc_info=error.original
+                f"Error in slash command {interaction.command.name}.", exc_info=error.original
             )
             await send(
                 "An error occured when running the command. Contact support if this persists."
@@ -507,7 +507,7 @@ class BallsDexBot(commands.AutoShardedBot):
             log.error(error.args[0])
 
         await send("An error occured when running the command. Contact support if this persists.")
-        log.error("Unknown error in interaction", exc_info=error)
+        log.error("Unknown error in interaction.", exc_info=error)
 
     async def on_error(self, event_method: str, /, *args, **kwargs):
         formatted_args = ", ".join((repr(x) for x in args))
