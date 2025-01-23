@@ -25,7 +25,7 @@ discord.voice_client.VoiceClient.warn_nacl = False  # disable PyNACL warning
 log = logging.getLogger("ballsdex")
 
 TORTOISE_ORM = {
-    "connections": {"default": settings.postgres_url},
+    "connections": {"default": f"{settings.postgres_url}"},
     "apps": {
         "models": {
             "models": ["ballsdex.core.models", "aerich.models"],
@@ -299,7 +299,7 @@ def main():
         prefix = settings.prefix
         
         try:
-            loop.run_until_complete(init_tortoise(db_url))
+            loop.run_until_complete(init_tortoise(f"{db_url}"))
         except Exception:
             log.exception("Failed to connect to database.")
             return  # will exit with code 1
