@@ -1,5 +1,5 @@
 fastapi==0.115.4
-git+https://github.com/Ballsdex-Team/fastapi-admin/tree/ballsdex
+fastapi-admin[ballsdex] @ git+https://github.com/Ballsdex-Team/fastapi-admin/
 uvicorn==0.32.0
 tortoise-orm==0.22.2
 asyncpg>=0.12.0
