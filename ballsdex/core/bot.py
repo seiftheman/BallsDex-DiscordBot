@@ -43,9 +43,6 @@ from ballsdex.settings import settings
 if TYPE_CHECKING:
     from discord.ext.commands.bot import PrefixType
 
-loop = asyncio.WindowsSelectorEventLoopPolicy()
-asyncio.set_event_loop_policy(loop)
-
 log = logging.getLogger("ballsdex.core.bot")
 http_counter = Histogram("discord_http_requests", "HTTP requests", ["key", "code"])
 
@@ -125,7 +122,7 @@ class CommandTree(app_commands.CommandTree):
 
 class BallsDexBot(commands.AutoShardedBot):
     """
-    BallsDex Discord bot
+    BallsDex Discord bot.
     """
 
     def __init__(
@@ -400,7 +397,7 @@ class BallsDexBot(commands.AutoShardedBot):
         assert context.command
         if isinstance(exception, (commands.ConversionError, commands.UserInputError)):
             # in case we need to know what happened
-            log.debug("Silenced command exception", exc_info=exception)
+            log.debug("Silenced command exception.", exc_info=exception)
             await context.send_help(context.command)
             return
 
@@ -431,7 +428,7 @@ class BallsDexBot(commands.AutoShardedBot):
             await context.send(
                 "An error occured when running the command. Contact support if this persists."
             )
-            log.error(f"Unknown error in text command {context.command.name}", exc_info=exception)
+            log.error(f"Unknown error in text command {context.command.name}.", exc_info=exception)
 
     async def on_application_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
