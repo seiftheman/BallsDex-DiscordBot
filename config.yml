@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=json-config-ref.json
+
+# paste the bot token after regenerating it here
+discord-token:
+
+# prefix for old-style text commands, mostly unused
+text-prefix: b.
+
+# define the elements given with the /about command
+about:
+
+  # define the beginning of the description of /about
+  # the other parts is automatically generated
+  description: >
+    Collect countryballs on Discord, exchange them and battle with friends!
+
+  # override this if you have a fork
+  github-link: https://github.com/laggron42/BallsDex-DiscordBot
+
+  # valid invite for a Discord server
+  discord-invite: https://discord.gg/ballsdex  # BallsDex official server
+
+  terms-of-service: https://gist.github.com/laggron42/52ae099c55c6ee1320a260b0a3ecac4e
+  privacy-policy: https://gist.github.com/laggron42/1eaa122013120cdfcc6d27f9485fe0bf
+
+postgres_url:
+
+redis_url:
+
+# WORK IN PROGRESS, DOES NOT FULLY WORK
+# override the name "countryball" in the bot
+collectible-name: countryball
+
+# WORK IN PROGRESS, DOES NOT FULLY WORK
+# override the name "countryballs" in the bot
+plural-collectible-name: countryballs
+
+# WORK IN PROGRESS, DOES NOT FULLY WORK
+# override the name "BallsDex" in the bot
+bot-name: BallsDex
+
+# players group cog command name
+# this is /balls by default, but you can change it for /animals or /rocks for example
+players-group-cog-name: balls
+
+# maximum amount of favorites that are allowed
+max-favorites: 50
+
+# the highest/lowest possible attack bonus, do not leave empty
+# this cannot be smaller than 0, enter a positive number
+max-attack-bonus: 20
+
+# the highest/lowest possible health bonus, do not leave empty
+# this cannot be smaller than 0, enter a positive number
+max-health-bonus: 20
+
+# enables the /admin command
+admin-command:
+
+  # all items here are list of IDs. example on how to write IDs in a list:
+  # guild-ids:
+  #   - 1049118743101452329
+  #   - 1078701108500897923
+
+  # list of guild IDs where /admin should be registered
+  guild-ids:
+
+  # list of role IDs having full access to /admin
+  root-role-ids:
+
+  # list of role IDs having partial access to /admin
+  admin-role-ids:
+
+# log channel for moderation actions
+log-channel:
+
+# manage bot ownership
+owners:
+  # if enabled and the application is under a team, all team members will be considered as owners
+  team-members-are-owners: false
+
+  # a list of IDs that must be considered owners in addition to the application/team owner
+  co-owners:
+
+# list of packages that will be loaded
+packages:
+  - ballsdex.packages.admin
+  - ballsdex.packages.balls
+  - ballsdex.packages.config
+  - ballsdex.packages.countryballs
+  - ballsdex.packages.info
+  - ballsdex.packages.players
+  - ballsdex.packages.trade
+
+# prometheus metrics collection, leave disabled if you don't know what this is
+prometheus:
+  enabled: false
+  host: "0.0.0.0"
+  port: 15260
+
+spawn-manager: ballsdex.packages.countryballs.spawn.SpawnManager
+  

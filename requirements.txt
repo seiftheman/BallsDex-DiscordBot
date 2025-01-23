@@ -1,0 +1,18 @@
+fastapi==0.115.4
+git+https://github.com/Ballsdex-Team/fastapi-admin/tree/ballsdex
+uvicorn==0.32.0
+tortoise-orm==0.22.2
+asyncpg>=0.12.0
+tortoise-cli==0.1.2
+rich==13.8.0
+python-dateutil==2.9.0
+Pillow==10.4.0
+aerich==0.6.3
+pyyaml==6.0.2
+cachetools==5.5.0
+pre-commit==3.7.1
+black ==24.8.0
+flake8-pyproject==1.2.3
+pyright==1.1.335
+isort==5.13.2
+prometheus-client ==0.20.0
