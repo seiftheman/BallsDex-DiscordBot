@@ -58,7 +58,7 @@ def init_fastapi_app() -> FastAPI:
     @app.on_event("startup")
     async def startup():
         redis = aioredis.from_url(
-            settings.redis_url, decode_responses=True, encoding="utf8"
+            f"{settings.redis_url}", decode_responses=True, encoding="utf8"
         )
         await admin_app.configure(
             logo_url="https://i.imgur.com/HwNKi5a.png",
