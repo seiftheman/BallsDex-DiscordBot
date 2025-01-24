@@ -239,7 +239,7 @@ class Admin(commands.GroupCog):
         source.embed.set_author(name=f"{user} ({user.id})", icon_url=user.display_avatar.url)
 
         if len(guilds) > 1:
-            source.embed.title = f"{len(guilds)} servers shared.."
+            source.embed.title = f"{len(guilds)} servers shared."
         else:
             source.embed.title = "1 server shared."
 
