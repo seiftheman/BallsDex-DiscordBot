@@ -63,7 +63,7 @@ class Config(commands.GroupCog):
                 channel = interaction.channel
             else:
                 await interaction.response.send_message(
-                    "The current channel is not a valid text channel.", ephemeral=True
+                    "Now you see, there is something called telling me a valid text channel.", ephemeral=True
                 )
                 return
 
