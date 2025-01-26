@@ -217,12 +217,12 @@ class Button:
         else:
             # Unfurl the method to not be bound
             if not isinstance(menu_self, Menu):
-                raise TypeError("Action bound method must be from Menu not %r" % menu_self)
+                raise TypeError("Action bound method must be from Menu not %r." % menu_self)
 
             value = value.__func__
 
         if not inspect.iscoroutinefunction(value):
-            raise TypeError("Action must be a coroutine not %r" % value)
+            raise TypeError("Action must be a coroutine not %r." % value)
 
         self._action = value
 
