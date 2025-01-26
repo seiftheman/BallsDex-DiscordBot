@@ -31,7 +31,7 @@ class ConfirmChoiceView(View):
 
         if self.value is not None:
             await interaction.response.send_message(
-                "You've already made a choice.", ephemeral=True
+                "You have already made a choice.", ephemeral=True
             )
             return False
         return True
