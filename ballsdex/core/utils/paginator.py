@@ -87,7 +87,7 @@ class Pages(discord.ui.View):
         elif value is True:
             return {}
         else:
-            raise TypeError("Wrong page type returned")
+            raise TypeError("Wrong page type returned.")
 
     async def show_page(self, interaction: discord.Interaction, page_number: int) -> None:
         page = await self.source.get_page(page_number)
@@ -218,7 +218,7 @@ class Pages(discord.ui.View):
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.blurple)
     async def go_to_next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """go to the next page"""
+        """Go to the next page."""
         await self.show_checked_page(interaction, self.current_page + 1)
 
     @discord.ui.button(label="≫", style=discord.ButtonStyle.grey)
@@ -290,7 +290,7 @@ class FieldPageSource(menus.ListPageSource):
 
         maximum = self.get_max_pages()
         if maximum > 1:
-            text = f"Page {menu.current_page + 1}/{maximum}"
+            text = f"Page {menu.current_page + 1}/{maximum}."
             self.embed.set_footer(text=text)
 
         return self.embed
@@ -307,7 +307,7 @@ class TextPageSource(menus.ListPageSource):
     async def format_page(self, menu: Pages, content):
         maximum = self.get_max_pages()
         if maximum > 1:
-            return f"{content}\nPage {menu.current_page + 1}/{maximum}"
+            return f"{content}\nPage {menu.current_page + 1}/{maximum}."
         return content
 
 
