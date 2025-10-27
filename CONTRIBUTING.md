@@ -60,17 +60,6 @@ pyinstrument, allowing you to profile a page by appending `?profile` at the end.
 > Do not use `python3 manage.py runserver` to run the server, since the bot relies on async code.
 > Django must be started with an ASGI server, not the default WSGI.
 
-## Integrating your IDE
-
-To have proper autocompletion and type checking, your IDE must be aware of your poetry virtualenv.
-
-The path to Python can be obtained with `poetry env info -p`, copy that and configure your editor
-to use it. Some editors like VS code may detect your poetry env automatically when picking
-versions.
-
-You can also install extensions to work with black, flake8 and pyright (Pylance for VS code).
-Their configurations are already written in `pyproject.toml`, so it should work as-is.
-
 ## Migrations
 
 If you are modifying models definition, you need migrations to update the database schema.
