@@ -254,7 +254,7 @@ about:
   terms-of-service: https://gist.github.com/ # replace with your own link
   privacy-policy: https://gist.github.com/ # replace with your own link
 
- postgres_url: 
+postgres_url: 
 
 # WORK IN PROGRESS, DOES NOT FULLY WORK
 # override the name "countryball" in the bot
