@@ -1,4 +1,3 @@
-from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
@@ -21,6 +20,7 @@ from .logs import Logs as LogsGroup
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
     from ballsdex.packages.countryballs.cog import CountryBallsSpawner
+    from ballsdex.packages.trade.cog import Trade
 
 
 @app_commands.guilds(*settings.admin_guild_ids)
@@ -30,12 +30,12 @@ class Admin(commands.GroupCog):
     Bot admin commands.
     """
 
-    def __init__(self, bot: BallsDexBot):
+    def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
 
         assert self.__cog_app_commands_group__
         self.__cog_app_commands_group__.add_command(
-            BallsGroup(name=settings.plural_collectible_name)
+            BallsGroup(name=settings.players_group_cog_name)
         )
         self.__cog_app_commands_group__.add_command(BlacklistGroup())
         self.__cog_app_commands_group__.add_command(BlacklistGuildGroup())
@@ -47,7 +47,7 @@ class Admin(commands.GroupCog):
     @app_commands.checks.has_any_role(*settings.root_role_ids)
     async def status(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction["BallsDexBot"],
         status: discord.Status | None = None,
         name: str | None = None,
         state: str | None = None,
@@ -59,13 +59,13 @@ class Admin(commands.GroupCog):
         Parameters
         ----------
         status: discord.Status
-            The status you want to set.
+            The status you want to set
         name: str
-            Title of the activity, if not custom.
+            Title of the activity, if not custom
         state: str
-            Custom status or subtitle of the activity.
+            Custom status or subtitle of the activity
         activity_type: discord.ActivityType
-            The type of activity.
+            The type of activity
         """
         if not status and not name and not state:
             await interaction.response.send_message(
@@ -94,9 +94,49 @@ class Admin(commands.GroupCog):
 
     @app_commands.command()
     @app_commands.checks.has_any_role(*settings.root_role_ids)
+    async def trade_lockdown(
+        self, interaction: discord.Interaction["BallsDexBot"], *, reason: str
+    ):
+        """
+        Cancel all ongoing trades and lock down further trades from being started.
+
+        Parameters
+        ----------
+        reason: str
+            The reason of the lockdown. This will be displayed to all trading users.
+        """
+        cog = cast("Trade | None", self.bot.get_cog("Trade"))
+        if not cog:
+            await interaction.response.send_message("The trade cog is not loaded.", ephemeral=True)
+            return
+
+        await interaction.response.defer(thinking=True)
+        result = await cog.cancel_all_trades(reason)
+
+        assert self.bot.user
+        prefix = (
+            settings.prefix if self.bot.intents.message_content else f"{self.bot.user.mention} "
+        )
+
+        if not result:
+            await interaction.followup.send(
+                "All trades were successfully cancelled, and further trades cannot be started "
+                f'anymore.\nTo enable trades again, the bot owner must use the "{prefix}reload '
+                'trade" command.'
+            )
+        else:
+            await interaction.followup.send(
+                "Lockdown mode enabled, trades can no longer be started. "
+                f"While cancelling ongoing trades, {len(result)} failed to cancel, check your "
+                "logs for info.\nTo enable trades again, the bot owner must use the "
+                f'"{prefix}reload trade" command.'
+            )
+
+    @app_commands.command()
+    @app_commands.checks.has_any_role(*settings.root_role_ids)
     async def rarity(
         self,
-        interaction: discord.Interaction[BallsDexBot],
+        interaction: discord.Interaction["BallsDexBot"],
         chunked: bool = True,
         include_disabled: bool = False,
     ):
@@ -135,14 +175,14 @@ class Admin(commands.GroupCog):
         await pages.start(ephemeral=True)
 
     @app_commands.command()
-    @app_commands.checks.has_any_role(*settings.root_role_ids, *settings.admin_role_ids)
+    @app_commands.checks.has_any_role(*settings.root_role_ids)
     async def cooldown(
         self,
-        interaction: discord.Interaction[BallsDexBot],
+        interaction: discord.Interaction["BallsDexBot"],
         guild_id: str | None = None,
     ):
         """
-        Show the details of the spawn cooldown system for the given server.
+        Show the details of the spawn cooldown system for the given server
 
         Parameters
         ----------
@@ -174,11 +214,11 @@ class Admin(commands.GroupCog):
     @app_commands.checks.has_any_role(*settings.root_role_ids, *settings.admin_role_ids)
     async def guilds(
         self,
-        interaction: discord.Interaction[BallsDexBot],
+        interaction: discord.Interaction["BallsDexBot"],
         user: discord.User,
     ):
         """
-        Shows the guilds shared with the specified user.
+        Shows the guilds shared with the specified user. Provide either user or user_id.
 
         Parameters
         ----------
@@ -223,15 +263,15 @@ class Admin(commands.GroupCog):
 
             # highlight low member count
             if guild.member_count <= 3:  # type: ignore
-                field_value += f"- :warning: **{guild.member_count} members.**\n"
+                field_value += f"- :warning: **{guild.member_count} members**\n"
             else:
-                field_value += f"- {guild.member_count} members.\n"
+                field_value += f"- {guild.member_count} members\n"
 
             # highlight if spawning is enabled
             if spawn_enabled:
-                field_value += "- :warning: **Spawn is enabled.**"
+                field_value += "- :warning: **Spawn is enabled**"
             else:
-                field_value += "- Spawn is disabled."
+                field_value += "- Spawn is disabled"
 
             entries.append((field_name, field_value))
 
@@ -239,9 +279,9 @@ class Admin(commands.GroupCog):
         source.embed.set_author(name=f"{user} ({user.id})", icon_url=user.display_avatar.url)
 
         if len(guilds) > 1:
-            source.embed.title = f"{len(guilds)} servers shared."
+            source.embed.title = f"{len(guilds)} servers shared"
         else:
-            source.embed.title = "1 server shared."
+            source.embed.title = "1 server shared"
 
         if not self.bot.intents.members:
             source.embed.set_footer(

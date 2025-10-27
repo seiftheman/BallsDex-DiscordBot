@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, cast
 
 import discord
@@ -20,9 +19,9 @@ activation_embed = discord.Embed(
     "As a summary, these are the rules of the bot:\n"
     f"- No farming (spamming or creating servers for {settings.plural_collectible_name})\n"
     f"- Selling or exchanging {settings.plural_collectible_name} "
-    "against money or other goods is forbidden.\n"
-    "- Do not attempt to abuse the bot's internals.\n"
-    "**Not respecting these rules will lead to a blacklist.**",
+    "against money or other goods is forbidden\n"
+    "- Do not attempt to abuse the bot's internals\n"
+    "**Not respecting these rules will lead to a blacklist**",
 )
 
 
@@ -33,7 +32,7 @@ class Config(commands.GroupCog):
     View and manage your countryballs collection.
     """
 
-    def __init__(self, bot: BallsDexBot):
+    def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
 
     @app_commands.command()
@@ -45,7 +44,7 @@ class Config(commands.GroupCog):
     )
     async def channel(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction["BallsDexBot"],
         channel: Optional[discord.TextChannel] = None,
     ):
         """
@@ -63,12 +62,27 @@ class Config(commands.GroupCog):
                 channel = interaction.channel
             else:
                 await interaction.response.send_message(
-                    "Now you see, there is something called telling me a valid text channel.", ephemeral=True
+                    "The current channel is not a valid text channel.", ephemeral=True
                 )
                 return
 
         view = AcceptTOSView(interaction, channel, user)
-        message = await channel.send(embed=activation_embed, view=view)
+        embed = activation_embed.copy()
+
+        guild = interaction.guild
+        assert guild
+        readable_channels = len(
+            [x for x in guild.text_channels if x.permissions_for(guild.me).read_messages]
+        )
+        if readable_channels / len(guild.text_channels) < 0.75:
+            embed.add_field(
+                name="\N{WARNING SIGN}\N{VARIATION SELECTOR-16} Warning",
+                value=f"This server has {len(guild.text_channels)} channels, but "
+                f"{settings.bot_name} can only read {readable_channels} channels.\n"
+                "Spawn is based on message activity, too few readable channels will result in "
+                "fewer spawns. It is recommended that you inspect your permissions.",
+            )
+        message = await channel.send(embed=embed, view=view)
         view.message = message
 
         await interaction.response.send_message(
@@ -78,7 +92,7 @@ class Config(commands.GroupCog):
     @app_commands.command()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.checks.bot_has_permissions(send_messages=True)
-    async def toggle(self, interaction: discord.Interaction):
+    async def disable(self, interaction: discord.Interaction["BallsDexBot"]):
         """
         Disable or enable countryballs spawning.
         """

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -39,7 +37,7 @@ def strip_descriptions(cog: Admin):
             param._Parameter__parent.description = "."  # type: ignore
 
 
-async def setup(bot: BallsDexBot):
+async def setup(bot: "BallsDexBot"):
     n = Admin(bot)
     if command_count(n) > 3900:
         strip_descriptions(n)

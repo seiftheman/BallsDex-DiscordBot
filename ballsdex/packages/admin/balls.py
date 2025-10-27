@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 import random
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord import app_commands
@@ -12,7 +11,7 @@ from discord.utils import format_dt
 from tortoise.exceptions import BaseORMException, DoesNotExist
 
 from ballsdex.core.bot import BallsDexBot
-from ballsdex.core.models import Ball, BallInstance, Player, Trade, TradeObject
+from ballsdex.core.models import Ball, BallInstance, Player, Special, Trade, TradeObject
 from ballsdex.core.utils.buttons import ConfirmChoiceView
 from ballsdex.core.utils.logging import log_action
 from ballsdex.core.utils.transformers import (
@@ -21,48 +20,54 @@ from ballsdex.core.utils.transformers import (
     RegimeTransform,
     SpecialTransform,
 )
-from ballsdex.packages.countryballs.countryball import CountryBall
 from ballsdex.settings import settings
+
+if TYPE_CHECKING:
+    from ballsdex.packages.countryballs.cog import CountryBallsSpawner
+    from ballsdex.packages.countryballs.countryball import BallSpawnView
 
 log = logging.getLogger("ballsdex.packages.admin.balls")
 FILENAME_RE = re.compile(r"^(.+)(\.\S+)$")
 
 
 async def save_file(attachment: discord.Attachment) -> Path:
-    path = Path(f"./static/uploads/{attachment.filename}")
+    path = Path(f"./admin_panel/media/{attachment.filename}")
     match = FILENAME_RE.match(attachment.filename)
     if not match:
         raise TypeError("The file you uploaded lacks an extension.")
     i = 1
     while path.exists():
-        path = Path(f"./static/uploads/{match.group(1)}-{i}{match.group(2)}")
+        path = Path(f"./admin_panel/media/{match.group(1)}-{i}{match.group(2)}")
         i = i + 1
     await attachment.save(path)
-    return path
+    return path.relative_to("./admin_panel/media/")
 
 
 class Balls(app_commands.Group):
     """
-    Countryballs management.
+    Countryballs management
     """
 
     async def _spawn_bomb(
         self,
         interaction: discord.Interaction[BallsDexBot],
+        countryball_cls: type["BallSpawnView"],
         countryball: Ball | None,
         channel: discord.TextChannel,
         n: int,
+        special: Special | None = None,
+        atk_bonus: int | None = None,
+        hp_bonus: int | None = None,
     ):
         spawned = 0
 
         async def update_message_loop():
-            nonlocal spawned
             for i in range(5 * 12 * 10):  # timeout progress after 10 minutes
                 await interaction.followup.edit_message(
                     "@original",  # type: ignore
                     content=f"Spawn bomb in progress in {channel.mention}, "
                     f"{settings.collectible_name.title()}: {countryball or 'Random'}\n"
-                    f"{spawned}/{n} spawned ({round((spawned / n) * 100)}%).",
+                    f"{spawned}/{n} spawned ({round((spawned / n) * 100)}%)",
                 )
                 await asyncio.sleep(5)
             await interaction.followup.edit_message(
@@ -76,9 +81,12 @@ class Balls(app_commands.Group):
         try:
             for i in range(n):
                 if not countryball:
-                    ball = await CountryBall.get_random()
+                    ball = await countryball_cls.get_random(interaction.client)
                 else:
-                    ball = CountryBall(countryball)
+                    ball = countryball_cls(interaction.client, countryball)
+                ball.special = special
+                ball.atk_bonus = atk_bonus
+                ball.hp_bonus = hp_bonus
                 result = await ball.spawn(channel)
                 if not result:
                     task.cancel()
@@ -106,7 +114,10 @@ class Balls(app_commands.Group):
         interaction: discord.Interaction[BallsDexBot],
         countryball: BallTransform | None = None,
         channel: discord.TextChannel | None = None,
-        n: int = 1,
+        n: app_commands.Range[int, 1, 100] = 1,
+        special: SpecialTransform | None = None,
+        atk_bonus: int | None = None,
+        hp_bonus: int | None = None,
     ):
         """
         Force spawn a random or specified countryball.
@@ -120,31 +131,54 @@ class Balls(app_commands.Group):
         n: int
             The number of countryballs to spawn. If no countryball was specified, it's random
             every time.
+        special: Special | None
+            Force the countryball to have a special attribute when caught.
+        atk_bonus: int | None
+            Force the countryball to have a specific attack bonus when caught.
+        hp_bonus: int | None
+            Force the countryball to have a specific health bonus when caught.
         """
         # the transformer triggered a response, meaning user tried an incorrect input
         if interaction.response.is_done():
             return
-
-        if n < 1:
-            await interaction.response.send_message(
-                "`n` must be superior or equal to 1.", ephemeral=True
+        cog = cast("CountryBallsSpawner | None", interaction.client.get_cog("CountryBallsSpawner"))
+        if not cog:
+            prefix = (
+                settings.prefix
+                if interaction.client.intents.message_content or not interaction.client.user
+                else f"{interaction.client.user.mention} "
             )
-            return
-        if n > 100:
+            # do not replace `countryballs` with `settings.collectible_name`, it is intended
             await interaction.response.send_message(
-                f"That doesn't seem reasonable to spawn {n} times, "
-                "the bot will be rate-limited. Try something lower than 100.",
+                "The `countryballs` package is not loaded, this command is unavailable.\n"
+                "Please resolve the errors preventing this package from loading. Use "
+                f'"{prefix}reload countryballs" to try reloading it.',
                 ephemeral=True,
             )
             return
 
+        special_attrs = []
+        if special is not None:
+            special_attrs.append(f"special={special.name}")
+        if atk_bonus is not None:
+            special_attrs.append(f"atk={atk_bonus}")
+        if hp_bonus is not None:
+            special_attrs.append(f"hp={hp_bonus}")
         if n > 1:
             await self._spawn_bomb(
-                interaction, countryball, channel or interaction.channel, n  # type: ignore
+                interaction,
+                cog.countryball_cls,
+                countryball,
+                channel or interaction.channel,  # type: ignore
+                n,
+                special,
+                atk_bonus,
+                hp_bonus,
             )
             await log_action(
                 f"{interaction.user} spawned {settings.collectible_name}"
-                f" {countryball or 'random'} {n} times in {channel or interaction.channel}.",
+                f" {countryball or 'random'} {n} times in {channel or interaction.channel}"
+                + (f" ({", ".join(special_attrs)})." if special_attrs else "."),
                 interaction.client,
             )
 
@@ -152,9 +186,12 @@ class Balls(app_commands.Group):
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         if not countryball:
-            ball = await CountryBall.get_random()
+            ball = await cog.countryball_cls.get_random(interaction.client)
         else:
-            ball = CountryBall(countryball)
+            ball = cog.countryball_cls(interaction.client, countryball)
+        ball.special = special
+        ball.atk_bonus = atk_bonus
+        ball.hp_bonus = hp_bonus
         result = await ball.spawn(channel or interaction.channel)  # type: ignore
 
         if result:
@@ -163,7 +200,8 @@ class Balls(app_commands.Group):
             )
             await log_action(
                 f"{interaction.user} spawned {settings.collectible_name} {ball.name} "
-                f"in {channel or interaction.channel}.",
+                f"in {channel or interaction.channel}"
+                + (f" ({", ".join(special_attrs)})." if special_attrs else "."),
                 interaction.client,
             )
 
@@ -257,6 +295,11 @@ class Balls(app_commands.Group):
             if ball.catch_date and ball.spawned_time
             else "N/A"
         )
+        admin_url = (
+            f"[View online](<{settings.admin_url}/bd_models/ballinstance/{ball.pk}/change/>)"
+            if settings.admin_url
+            else ""
+        )
         await interaction.response.send_message(
             f"**{settings.collectible_name.title()} ID:** {ball.pk}\n"
             f"**Player:** {ball.player}\n"
@@ -270,7 +313,7 @@ class Balls(app_commands.Group):
             f"**Spawned at:** {spawned_time}\n"
             f"**Catch time:** {catch_time} seconds\n"
             f"**Caught in:** {ball.server_id if ball.server_id else 'N/A'}\n"
-            f"**Traded:** {ball.trade_player}\n",
+            f"**Traded:** {ball.trade_player}\n{admin_url}",
             ephemeral=True,
         )
         await log_action(f"{interaction.user} got info for {ball}({ball.pk}).", interaction.client)
@@ -278,7 +321,10 @@ class Balls(app_commands.Group):
     @app_commands.command(name="delete")
     @app_commands.checks.has_any_role(*settings.root_role_ids)
     async def balls_delete(
-        self, interaction: discord.Interaction[BallsDexBot], countryball_id: str
+        self,
+        interaction: discord.Interaction[BallsDexBot],
+        countryball_id: str,
+        soft_delete: bool = True,
     ):
         """
         Delete a countryball.
@@ -287,6 +333,8 @@ class Balls(app_commands.Group):
         ----------
         countryball_id: str
             The ID of the countryball you want to delete.
+        soft_delete: bool
+            Whether the countryball should be kept in database or fully wiped.
         """
         try:
             ballIdConverted = int(countryball_id, 16)
@@ -302,11 +350,25 @@ class Balls(app_commands.Group):
                 f"The {settings.collectible_name} ID you gave does not exist.", ephemeral=True
             )
             return
-        await ball.delete()
-        await interaction.response.send_message(
-            f"{settings.collectible_name.title()} {countryball_id} deleted.", ephemeral=True
-        )
-        await log_action(f"{interaction.user} deleted {ball}({ball.pk}).", interaction.client)
+        if soft_delete:
+            ball.deleted = True
+            await ball.save()
+            await interaction.response.send_message(
+                f"{settings.collectible_name.title()} {countryball_id} soft deleted.",
+                ephemeral=True,
+            )
+            await log_action(
+                f"{interaction.user} soft deleted {ball}({ball.pk}).", interaction.client
+            )
+        else:
+            await ball.delete()
+            await interaction.response.send_message(
+                f"{settings.collectible_name.title()} {countryball_id} hard deleted.",
+                ephemeral=True,
+            )
+            await log_action(
+                f"{interaction.user} hard deleted {ball}({ball.pk}).", interaction.client
+            )
 
     @app_commands.command(name="transfer")
     @app_commands.checks.has_any_role(*settings.root_role_ids)
@@ -363,6 +425,7 @@ class Balls(app_commands.Group):
         interaction: discord.Interaction[BallsDexBot],
         user: discord.User,
         percentage: int | None = None,
+        soft_delete: bool = True,
     ):
         """
         Reset a player's countryballs.
@@ -373,6 +436,9 @@ class Balls(app_commands.Group):
             The user you want to reset the countryballs of.
         percentage: int | None
             The percentage of countryballs to delete, if not all. Used for sanctions.
+        soft_delete: bool
+            If true, the countryballs will be marked as deleted instead of being removed from the
+            database.
         """
         player = await Player.get_or_none(discord_id=user.id)
         if not player:
@@ -387,16 +453,21 @@ class Balls(app_commands.Group):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
 
+        method = "soft" if soft_delete else "hard"
         if not percentage:
-            text = f"Are you sure you want to delete {user}'s {settings.plural_collectible_name}?"
+            text = (
+                f"Are you sure you want to {method} delete {user}'s "
+                f"{settings.plural_collectible_name}?"
+            )
         else:
             text = (
-                f"Are you sure you want to delete {percentage}% of "
+                f"Are you sure you want to {method} delete {percentage}% of "
                 f"{user}'s {settings.plural_collectible_name}?"
             )
         view = ConfirmChoiceView(
             interaction,
-            accept_message=f"Confirmed, deleting the {settings.plural_collectible_name}...",
+            accept_message=f"Confirmed, {method} deleting the "
+            f"{settings.plural_collectible_name}...",
             cancel_message="Request cancelled.",
         )
         await interaction.followup.send(
@@ -411,16 +482,23 @@ class Balls(app_commands.Group):
             balls = await BallInstance.filter(player=player)
             to_delete = random.sample(balls, int(len(balls) * (percentage / 100)))
             for ball in to_delete:
-                await ball.delete()
+                if soft_delete:
+                    ball.deleted = True
+                    await ball.save()
+                else:
+                    await ball.delete()
             count = len(to_delete)
         else:
-            count = await BallInstance.filter(player=player).delete()
+            if soft_delete:
+                count = await BallInstance.filter(player=player).update(deleted=True)
+            else:
+                count = await BallInstance.filter(player=player).delete()
         await interaction.followup.send(
-            f"{count} {settings.plural_collectible_name} from {user} have been deleted.",
+            f"{count} {settings.plural_collectible_name} from {user} have been {method} deleted.",
             ephemeral=True,
         )
         await log_action(
-            f"{interaction.user} deleted {percentage or 100}% of "
+            f"{interaction.user} {method} deleted {percentage or 100}% of "
             f"{player}'s {settings.plural_collectible_name}.",
             interaction.client,
         )
@@ -433,6 +511,7 @@ class Balls(app_commands.Group):
         user: discord.User | None = None,
         countryball: BallTransform | None = None,
         special: SpecialTransform | None = None,
+        deleted: bool = False,
     ):
         """
         Count the number of countryballs that a player has or how many exist in total.
@@ -443,6 +522,8 @@ class Balls(app_commands.Group):
             The user you want to count the countryballs of.
         countryball: Ball
         special: Special
+        deleted: bool
+            Include soft deleted countryballs
         """
         if interaction.response.is_done():
             return
@@ -454,7 +535,8 @@ class Balls(app_commands.Group):
         if user:
             filters["player__discord_id"] = user.id
         await interaction.response.defer(ephemeral=True, thinking=True)
-        balls = await BallInstance.filter(**filters).count()
+        qs = BallInstance.all_objects if deleted else BallInstance
+        balls = await qs.filter(**filters).count()
         verb = "is" if balls == 1 else "are"
         country = f"{countryball.country} " if countryball else ""
         plural = "s" if balls > 1 or balls == 0 else ""
@@ -486,10 +568,10 @@ class Balls(app_commands.Group):
         collection_card: discord.Attachment,
         image_credits: str,
         economy: EconomyTransform | None = None,
-        rarity: float,
-        enabled: bool,
-        tradeable: bool,
-        wild_card: discord.Attachment,
+        rarity: float = 0.0,
+        enabled: bool = False,
+        tradeable: bool = False,
+        wild_card: discord.Attachment | None = None,
     ):
         """
         Shortcut command for creating countryballs. They are disabled by default.
@@ -502,19 +584,19 @@ class Balls(app_commands.Group):
         health: int
         attack: int
         emoji_id: str
-            An emoji ID, the bot will check if it can access the custom emote.
+            An emoji ID, the bot will check if it can access the custom emote
         capacity_name: str
         capacity_description: str
         collection_card: discord.Attachment
         image_credits: str
         rarity: float
-            Value defining the rarity of this countryball, if enabled.
+            Value defining the rarity of this countryball, if enabled
         enabled: bool
-            If true, the countryball can spawn and will show up in global completion.
+            If true, the countryball can spawn and will show up in global completion
         tradeable: bool
-            If false, all instances are untradeable.
+            If false, all instances are untradeable
         wild_card: discord.Attachment
-            Artwork used to spawn the countryball.
+            Artwork used to spawn the countryball, with a default
         """
         if regime is None or interaction.response.is_done():  # economy autocomplete failed
             return
@@ -554,7 +636,7 @@ class Balls(app_commands.Group):
         try:
             wild_card_path = await save_file(wild_card) if wild_card else default_path
         except Exception as e:
-            log.exception("Failed saving file when creating countryball.", exc_info=True)
+            log.exception("Failed saving file when creating countryball", exc_info=True)
             await interaction.followup.send(
                 f"Failed saving the attached file: {collection_card.url}.\n"
                 f"Partial error: {', '.join(str(x) for x in e.args)}\n"
@@ -573,14 +655,14 @@ class Balls(app_commands.Group):
                 enabled=enabled,
                 tradeable=tradeable,
                 emoji_id=emoji_id,
-                wild_card="/" + str(wild_card_path),
-                collection_card="/" + str(collection_card_path),
+                wild_card=str(wild_card_path),
+                collection_card=str(collection_card_path),
                 credits=image_credits,
                 capacity_name=capacity_name,
                 capacity_description=capacity_description,
             )
         except BaseORMException as e:
-            log.exception("Failed creating countryball with admin command.", exc_info=True)
+            log.exception("Failed creating countryball with admin command", exc_info=True)
             await interaction.followup.send(
                 f"Failed creating the {settings.collectible_name}.\n"
                 f"Partial error: {', '.join(str(x) for x in e.args)}\n"
@@ -591,11 +673,17 @@ class Balls(app_commands.Group):
             if wild_card:
                 files.append(await wild_card.to_file())
             await interaction.client.load_cache()
+            admin_url = (
+                f"[View online](<{settings.admin_url}/bd_models/ball/{ball.pk}/change/>)\n"
+                if settings.admin_url
+                else ""
+            )
             await interaction.followup.send(
                 f"Successfully created a {settings.collectible_name} with ID {ball.pk}! "
-                "The internal cache was reloaded.\n"
+                f"The internal cache was reloaded.\n{admin_url}"
                 f"{missing_default}\n"
                 f"{name=} regime={regime.name} economy={economy.name if economy else None} "
                 f"{health=} {attack=} {rarity=} {enabled=} {tradeable=} emoji={emoji}",
                 files=files,
             )
+            log.info(f'{interaction.user} has created the {settings.collectible_name} "{name}"')

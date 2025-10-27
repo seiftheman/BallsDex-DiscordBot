@@ -20,7 +20,7 @@ async def row_count_estimate(table_name: str, *, analyze: bool = True) -> int:
     Returns
     -------
     int
-        Estimated number of rows.
+        Estimated number of rows
     """
     connection = Tortoise.get_connection("default")
 

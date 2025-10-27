@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 import math
@@ -25,7 +23,7 @@ class PrometheusServer:
     Host an HTTP server for metrics collection by Prometheus.
     """
 
-    def __init__(self, bot: BallsDexBot, host: str = "localhost", port: int = 15260):
+    def __init__(self, bot: "BallsDexBot", host: str = "localhost", port: int = 15260):
         self.bot = bot
         self.host = host
         self.port = port
@@ -37,13 +35,13 @@ class PrometheusServer:
 
         self.app.add_routes((web.get("/metrics", self.get),))
 
-        self.guild_count = Gauge("guilds", "Number of guilds the server is in.", ["size"])
+        self.guild_count = Gauge("guilds", "Number of guilds the server is in", ["size"])
         self.shards_latecy = Histogram(
-            "gateway_latency", "Shard latency with the Discord gateway.", ["shard_id"]
+            "gateway_latency", "Shard latency with the Discord gateway", ["shard_id"]
         )
         self.asyncio_delay = Histogram(
             "asyncio_delay",
-            "How much time asyncio takes to give back control.",
+            "How much time asyncio takes to give back control",
             buckets=(
                 0.001,
                 0.0025,
@@ -84,7 +82,7 @@ class PrometheusServer:
         self.asyncio_delay.observe((t2 - t1).total_seconds() - 1)
 
     async def get(self, request: web.Request) -> web.Response:
-        log.debug("Request received.")
+        log.debug("Request received")
         await self.collect_metrics()
         response = web.Response(body=generate_latest())
         response.content_type = CONTENT_TYPE_LATEST
@@ -98,11 +96,11 @@ class PrometheusServer:
 
     async def run(self):
         await self.setup()
-        await self.site.start()  # this call is not blocking
-        log.info(f"Prometheus server started on http://{self.site._host}:{self.site._port}/.")
+        await self.site.start()  # this call isn't blocking
+        log.info(f"Prometheus server started on http://{self.site._host}:{self.site._port}/")
 
     async def stop(self):
         if self._inited:
             await self.site.stop()
             await self.runner.cleanup()
-            log.info("Prometheus server stopped.")
+            log.info("Prometheus server stopped")

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import enum
 from typing import TYPE_CHECKING
 
@@ -9,6 +7,13 @@ if TYPE_CHECKING:
     from tortoise.queryset import QuerySet
 
     from ballsdex.core.models import BallInstance
+
+
+class FilteringChoices(enum.Enum):
+    only_specials = "special"
+    non_specials = "non_special"
+    self_caught = "self_caught"
+    this_server = "this_server"
 
 
 class SortingChoices(enum.Enum):
@@ -21,13 +26,13 @@ class SortingChoices(enum.Enum):
     health_bonus = "-health_bonus"
     attack_bonus = "-attack_bonus"
     stats_bonus = "stats"
-    total_stats = "total_stats"
+    # total_stats = "total_stats"
     duplicates = "duplicates"
 
 
 def sort_balls(
-    sort: SortingChoices, queryset: QuerySet[BallInstance]
-) -> QuerySet[BallInstance]:
+    sort: SortingChoices, queryset: "QuerySet[BallInstance]"
+) -> "QuerySet[BallInstance]":
     """
     Edit a queryset in place to apply the selected sorting options. You can call this function
     multiple times with the same queryset to have multiple sort methods.
@@ -60,11 +65,48 @@ def sort_balls(
         return queryset.annotate(
             **{f"{sort.value}_sort": F(f"{sort.value}_bonus") + F(f"ball__{sort.value}")}
         ).order_by(f"-{sort.value}_sort")
-    elif sort == SortingChoices.total_stats:
-        return queryset.annotate(
-            stats=F("health_bonus") + F("ball__health") + F("attack_bonus") + F("ball__attack")
-        ).order_by("-stats")
+    # elif sort == SortingChoices.total_stats:
+    #     return (
+    #         queryset.select_related("ball")
+    #         .annotate(
+    #             stats=RawSQL("ballinstance__ball.health + ballinstance__ball.attack :: BIGINT")
+    #         )
+    #         .order_by("-stats")
+    #     )
     elif sort == SortingChoices.rarity:
         return queryset.order_by(sort.value, "ball__country")
     else:
         return queryset.order_by(sort.value)
+
+
+def filter_balls(
+    filter: FilteringChoices, queryset: "QuerySet[BallInstance]", guild_id: int | None = None
+) -> "QuerySet[BallInstance]":
+    """
+    Edit a list of ball instances in place to apply the selected filtering options.
+
+    Parameters
+    ----------
+    filter: FilteringChoices
+        One of the supported filtering methods
+    balls: QuerySet[BallInstance]
+        A ballinstance queryset.
+    guild_id: int | None
+        The ID of the server to filter by. Only used for the ``this_server`` filter.
+        If not provided, this filter will be ignored.
+
+    Returns
+    -------
+    QuerySet[BallInstance]
+        The modified query applying the filtering.
+    """
+    if filter == FilteringChoices.only_specials:
+        return queryset.exclude(special=None)
+    elif filter == FilteringChoices.non_specials:
+        return queryset.filter(special=None)
+    elif filter == FilteringChoices.self_caught:
+        return queryset.filter(trade_player=None)
+    elif filter == FilteringChoices.this_server and guild_id is not None:
+        return queryset.filter(server_id=guild_id)
+    else:
+        return queryset

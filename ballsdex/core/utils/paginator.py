@@ -16,17 +16,17 @@ if TYPE_CHECKING:
 log = logging.getLogger("ballsdex.core.utils.paginator")
 
 
-class NumberedPageModal(discord.ui.Modal, title="Go to page."):
-    page = discord.ui.TextInput(label="Page", placeholder="Enter a number.", min_length=1)
+class NumberedPageModal(discord.ui.Modal, title="Go to page"):
+    page = discord.ui.TextInput(label="Page", placeholder="Enter a number", min_length=1)
 
     def __init__(self, max_pages: Optional[int]) -> None:
         super().__init__()
         if max_pages is not None:
             as_string = str(max_pages)
-            self.page.placeholder = f"Enter a number between 1 and {as_string}."
+            self.page.placeholder = f"Enter a number between 1 and {as_string}"
             self.page.max_length = len(as_string)
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction["BallsDexBot"]) -> None:
         self.interaction = interaction
         self.stop()
 
@@ -36,7 +36,7 @@ class Pages(discord.ui.View):
         self,
         source: menus.PageSource,
         *,
-        interaction: discord.Interaction[BallsDexBot],
+        interaction: discord.Interaction["BallsDexBot"],
         check_embeds: bool = False,
         compact: bool = False,
     ):
@@ -87,9 +87,11 @@ class Pages(discord.ui.View):
         elif value is True:
             return {}
         else:
-            raise TypeError("Wrong page type returned.")
+            raise TypeError("Wrong page type returned")
 
-    async def show_page(self, interaction: discord.Interaction, page_number: int) -> None:
+    async def show_page(
+        self, interaction: discord.Interaction["BallsDexBot"], page_number: int
+    ) -> None:
         page = await self.source.get_page(page_number)
         self.current_page = page_number
         kwargs = await self._get_kwargs_from_page(page)
@@ -130,7 +132,9 @@ class Pages(discord.ui.View):
                 self.go_to_previous_page.disabled = True
                 self.go_to_previous_page.label = "…"
 
-    async def show_checked_page(self, interaction: discord.Interaction, page_number: int) -> None:
+    async def show_checked_page(
+        self, interaction: discord.Interaction["BallsDexBot"], page_number: int
+    ) -> None:
         max_pages = self.source.get_max_pages()
         try:
             if max_pages is None:
@@ -167,14 +171,17 @@ class Pages(discord.ui.View):
             pass
 
     async def on_error(
-        self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item
+        self,
+        interaction: discord.Interaction["BallsDexBot"],
+        error: Exception,
+        item: discord.ui.Item,
     ) -> None:
-        log.error("Error on pagination.", exc_info=error)
+        log.error("Error on pagination", exc_info=error)
         if interaction.response.is_done():
-            await interaction.followup.send("An unknown error occurred, sorry.", ephemeral=True)
+            await interaction.followup.send("An unknown error occurred, sorry", ephemeral=True)
         else:
             await interaction.response.send_message(
-                "An unknown error occurred, sorry.", ephemeral=True
+                "An unknown error occurred, sorry", ephemeral=True
             )
 
     async def start(self, *, content: Optional[str] = None, ephemeral: bool = False) -> None:
@@ -199,53 +206,61 @@ class Pages(discord.ui.View):
         await self.send(**kwargs, view=self, ephemeral=ephemeral)
 
     @discord.ui.button(label="≪", style=discord.ButtonStyle.grey)
-    async def go_to_first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Go to the first page."""
+    async def go_to_first_page(
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
+    ):
+        """go to the first page"""
         await self.show_page(interaction, 0)
 
     @discord.ui.button(label="Back", style=discord.ButtonStyle.blurple)
     async def go_to_previous_page(
-        self, interaction: discord.Interaction, button: discord.ui.Button
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
     ):
-        """Go to the previous page."""
+        """go to the previous page"""
         await self.show_checked_page(interaction, self.current_page - 1)
 
     @discord.ui.button(label="Current", style=discord.ButtonStyle.grey, disabled=True)
     async def go_to_current_page(
-        self, interaction: discord.Interaction, button: discord.ui.Button
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
     ):
         pass
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.blurple)
-    async def go_to_next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Go to the next page."""
+    async def go_to_next_page(
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
+    ):
+        """go to the next page"""
         await self.show_checked_page(interaction, self.current_page + 1)
 
     @discord.ui.button(label="≫", style=discord.ButtonStyle.grey)
-    async def go_to_last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Go to the last page."""
-        # The call here is safe because it's guarded by skip_if.
+    async def go_to_last_page(
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
+    ):
+        """go to the last page"""
+        # The call here is safe because it's guarded by skip_if
         await self.show_page(interaction, self.source.get_max_pages() - 1)  # type: ignore
 
     @discord.ui.button(label="Skip to page...", style=discord.ButtonStyle.grey)
-    async def numbered_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Lets you type a page number to go to."""
+    async def numbered_page(
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
+    ):
+        """lets you type a page number to go to"""
 
         modal = NumberedPageModal(self.source.get_max_pages())
         await interaction.response.send_modal(modal)
         timed_out = await modal.wait()
 
         if timed_out:
-            await interaction.followup.send("Took too long.", ephemeral=True)
+            await interaction.followup.send("Took too long", ephemeral=True)
             return
         elif self.is_finished():
-            await modal.interaction.response.send_message("Took too long.", ephemeral=True)
+            await modal.interaction.response.send_message("Took too long", ephemeral=True)
             return
 
         value = str(modal.page.value)
         if not value.isdigit():
             await modal.interaction.response.send_message(
-                f"Expected a number not {value!r}.", ephemeral=True
+                f"Expected a number not {value!r}", ephemeral=True
             )
             return
 
@@ -256,8 +271,10 @@ class Pages(discord.ui.View):
             await modal.interaction.response.send_message(error, ephemeral=True)
 
     @discord.ui.button(label="Quit", style=discord.ButtonStyle.red)
-    async def stop_pages(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Stops the pagination session."""
+    async def stop_pages(
+        self, interaction: discord.Interaction["BallsDexBot"], button: discord.ui.Button
+    ):
+        """stops the pagination session."""
         for item in self.children:
             item.disabled = True  # type: ignore
         await interaction.response.edit_message(view=self)
@@ -290,7 +307,7 @@ class FieldPageSource(menus.ListPageSource):
 
         maximum = self.get_max_pages()
         if maximum > 1:
-            text = f"Page {menu.current_page + 1}/{maximum}."
+            text = f"Page {menu.current_page + 1}/{maximum}"
             self.embed.set_footer(text=text)
 
         return self.embed
@@ -307,7 +324,7 @@ class TextPageSource(menus.ListPageSource):
     async def format_page(self, menu: Pages, content):
         maximum = self.get_max_pages()
         if maximum > 1:
-            return f"{content}\nPage {menu.current_page + 1}/{maximum}."
+            return f"{content}\nPage {menu.current_page + 1}/{maximum}"
         return content
 
 
@@ -333,7 +350,7 @@ class SimplePages(Pages):
     """
 
     def __init__(
-        self, entries, *, interaction: discord.Interaction[BallsDexBot], per_page: int = 12
+        self, entries, *, interaction: discord.Interaction["BallsDexBot"], per_page: int = 12
     ):
         super().__init__(SimplePageSource(entries, per_page=per_page), interaction=interaction)
         self.embed = discord.Embed(colour=discord.Colour.blurple())

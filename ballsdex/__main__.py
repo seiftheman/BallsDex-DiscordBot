@@ -10,11 +10,13 @@ from pathlib import Path
 from signal import SIGTERM
 
 import discord
+import sentry_sdk
 import yarl
-from aerich import Command
 from discord.ext.commands import when_mentioned_or
 from rich import print
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from tortoise import Tortoise
+from yaml import YAMLError
 
 from ballsdex import __version__ as bot_version
 from ballsdex.core.bot import BallsDexBot
@@ -25,10 +27,10 @@ discord.voice_client.VoiceClient.warn_nacl = False  # disable PyNACL warning
 log = logging.getLogger("ballsdex")
 
 TORTOISE_ORM = {
-    "connections": {"default": f"{settings.postgres_url}"},
+    "connections": {"default": settings.postgres_url},
     "apps": {
         "models": {
-            "models": ["ballsdex.core.models", "aerich.models"],
+            "models": ["ballsdex.core.models"],
             "default_connection": "default",
         },
     },
@@ -49,27 +51,27 @@ class CLIFlags(argparse.Namespace):
 
 def parse_cli_flags(arguments: list[str]) -> CLIFlags:
     parser = argparse.ArgumentParser(
-        prog="BallsDex bot", description="Collect and exchange countryballs on Discord."
+        prog="BallsDex bot", description="Collect and exchange countryballs on Discord"
     )
     parser.add_argument("--version", "-V", action="store_true", help="Display the bot's version")
     parser.add_argument(
-        "--config-file", type=Path, help="Set the path to config.yml.", default=Path("./config.yml")
+        "--config-file", type=Path, help="Set the path to config.yml", default=Path("./config.yml")
     )
     parser.add_argument(
         "--reset-settings",
         action="store_true",
-        help="Reset the config file with the latest default configuration.",
+        help="Reset the config file with the latest default configuration",
     )
-    parser.add_argument("--disable-rich", action="store_true", help="Disable rich log format.")
+    parser.add_argument("--disable-rich", action="store_true", help="Disable rich log format")
     parser.add_argument(
         "--disable-message-content",
         action="store_true",
-        help="Disable usage of message content intent through the bot.",
+        help="Disable usage of message content intent through the bot",
     )
     parser.add_argument(
         "--disable-time-check",
         action="store_true",
-        help="Disables the 3 seconds delay check on interactions. Use this if you are getting a "
+        help="Disables the 3 seconds delay check on interactions. Use this if you're getting a "
         "lot of skipped interactions warning due to your PC's internal clock.",
     )
     parser.add_argument(
@@ -79,8 +81,8 @@ def parse_cli_flags(arguments: list[str]) -> CLIFlags:
         "avoids ratelimits, but risks of having desynced commands after updates. This is always "
         "enabled with clustering.",
     )
-    parser.add_argument("--debug", action="store_true", help="Enable debug logs.")
-    parser.add_argument("--dev", action="store_true", help="Enable developer mode.")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logs")
+    parser.add_argument("--dev", action="store_true", help="Enable developer mode")
     args = parser.parse_args(arguments, namespace=CLIFlags())
     return args
 
@@ -191,7 +193,7 @@ async def shutdown_handler(bot: BallsDexBot, signal_type: str | None = None):
 
 def global_exception_handler(bot: BallsDexBot, loop: asyncio.AbstractEventLoop, context: dict):
     """
-    Logs unhandled exceptions in other tasks.
+    Logs unhandled exceptions in other tasks
     """
     exc = context.get("exception")
     # These will get handled later when it *also* kills loop.run_forever
@@ -219,7 +221,7 @@ def bot_exception_handler(bot: BallsDexBot, bot_task: asyncio.Future):
     except (SystemExit, KeyboardInterrupt, asyncio.CancelledError):
         pass  # Handled by the global_exception_handler, or cancellation
     except Exception as exc:
-        log.critical("The main bot task didn't handle an exception and has crashed.", exc_info=exc)
+        log.critical("The main bot task didn't handle an exception and has crashed", exc_info=exc)
         log.warning("Attempting to die as gracefully as possible...")
         asyncio.create_task(shutdown_handler(bot))
 
@@ -237,16 +239,21 @@ class RemoveWSBehindMsg(logging.Filter):
         return True
 
 
-async def init_tortoise(db_url: str):
+async def init_tortoise(db_url: str, *, skip_migrations: bool = False):
     log.debug(f"Database URL: {db_url}")
+    TORTOISE_ORM["apps"]["models"]["models"].extend(settings.tortoise_models)
     await Tortoise.init(config=TORTOISE_ORM)
 
-    # migrations
-    command = Command(TORTOISE_ORM, app="models")
-    await command.init()
-    migrations = await command.upgrade()
-    if migrations:
-        log.info(f"Ran {len(migrations)} migrations: {', '.join(migrations)}")
+
+async def init_sentry():
+    if settings.sentry_dsn:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.sentry_environment,
+            release=bot_version,
+            integrations=[AsyncioIntegration()],
+        )  # TODO: Add breadcrumbs for clustering
+        log.info("Sentry initialized.")
 
 
 def main():
@@ -260,13 +267,28 @@ def main():
         print("[yellow]Resetting configuration file.[/yellow]")
         reset_settings(cli_flags.config_file)
 
-    try:
-        read_settings(cli_flags.config_file)
-    except FileNotFoundError:
+    if not cli_flags.config_file.exists():
         print("[yellow]The config file could not be found, generating a default one.[/yellow]")
         reset_settings(cli_flags.config_file)
-    else:
-        update_settings(cli_flags.config_file)
+
+    update_settings(cli_flags.config_file)
+
+    try:
+        read_settings(cli_flags.config_file)
+    except YAMLError:
+        print(
+            "[red]Your YAML is invalid!\nError parsing config file, please check your config"
+            " and try again[/red]"
+        )
+        time.sleep(1)
+        sys.exit(0)
+    except KeyError as missing_key:
+        print(
+            f"[red]Config file missing key {missing_key}!\nError parsing config file, please"
+            " check your config and try again[/red]"
+        )
+        time.sleep(1)
+        sys.exit(0)
 
     print_welcome()
     queue_listener: logging.handlers.QueueListener | None = None
@@ -284,22 +306,22 @@ def main():
             time.sleep(1)
             sys.exit(0)
 
+        db_url = settings.postgres_url
+        if not db_url:
+            log.error("Database URL not found!")
+            print("[red]You must provide a DB URL with the BALLSDEXBOT_DB_URL env var.[/red]")
+            time.sleep(1)
+            sys.exit(0)
+
         if settings.gateway_url is not None:
             log.info("Using custom gateway URL: %s", settings.gateway_url)
             patch_gateway(settings.gateway_url)
             logging.getLogger("discord.gateway").addFilter(RemoveWSBehindMsg())
 
-        db_url = settings.postgres_url
-        if not token:
-            log.error("Database URL not found!")
-            print("[red]You must provide a database URL inside the config.yml file.[/red]")
-            time.sleep(1)
-            sys.exit(0)
-        
         prefix = settings.prefix
-        
+
         try:
-            loop.run_until_complete(init_tortoise(f"{db_url}"))
+            loop.run_until_complete(init_tortoise(db_url))
         except Exception:
             log.exception("Failed to connect to database.")
             return  # will exit with code 1
@@ -309,11 +331,12 @@ def main():
             command_prefix=when_mentioned_or(prefix),
             dev=cli_flags.dev,  # type: ignore
             shard_count=settings.shard_count,
-            disable_messsage_content=cli_flags.disable_message_content,
+            disable_message_content=cli_flags.disable_message_content,
             disable_time_check=cli_flags.disable_time_check,
             skip_tree_sync=cli_flags.skip_tree_sync,
         )
 
+        loop.run_until_complete(init_sentry())
         exc_handler = functools.partial(global_exception_handler, bot)
         loop.set_exception_handler(exc_handler)
         try:

@@ -1,4 +1,5 @@
 import logging
+import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -34,7 +35,9 @@ class Settings:
         Usually "BallsDex", can be replaced when possible
     players_group_cog_name: str
         Set the name of the base command of the "players" cog, /balls by default
-    max_favorites:
+    favorited_collectible_emoji: str
+        Set the emoji used to represent a favorited countryball, "❤️" by default.
+    max_favorites: int
         Set the maximum amount of favorited countryballs a user can have, 50 by default.
     max_attack_bonus:
         Set the biggest/smallest attack bonus that a spawned countryball can have.
@@ -50,8 +53,6 @@ class Settings:
         Used in the /about command
     privacy_policy: str
         Used in the /about command
-    postgres_url: str
-    redis_url: str
     admin_guild_ids: list[int]
         List of guilds where the /admin command must be registered
     root_role_ids: list[int]
@@ -60,8 +61,16 @@ class Settings:
         List of roles that have partial access to the /admin command (only blacklist and guilds)
     packages: list[str]
         List of packages the bot will load upon startup
+    spawn_chance_range: tuple[int, int] = (40, 55)
+        default spawn range
     spawn_manager: str
         Python path to a class implementing `BaseSpawnManager`, handling cooldowns and anti-cheat
+    webhook_url: str | None
+        URL of a Discord webhook for admin notifications
+    client_id: str
+        ID of the Discord application
+    client_secret: str
+        Secret key of the Discord application (not the bot token)
     """
 
     bot_token: str = ""
@@ -73,10 +82,12 @@ class Settings:
     plural_collectible_name: str = "countryballs"
     bot_name: str = "BallsDex"
     players_group_cog_name: str = "balls"
+    favorited_collectible_emoji: str = "❤️"
 
     max_favorites: int = 50
     max_attack_bonus: int = 20
     max_health_bonus: int = 20
+    show_rarity: bool = False
 
     # /about
     about_description: str = ""
@@ -85,12 +96,12 @@ class Settings:
     terms_of_service: str = ""
     privacy_policy: str = ""
     postgres_url: str = "postgres://ballsdex:defaultballsdexpassword@localhost:5432/ballsdex"
-    redis_url: str = "redis://127.0.0.1/"
 
     # /admin
     admin_guild_ids: list[int] = field(default_factory=list)
     root_role_ids: list[int] = field(default_factory=list)
     admin_role_ids: list[int] = field(default_factory=list)
+    admin_channel_ids: list[int] = field(default_factory=list)
 
     log_channel: int | None = None
 
@@ -98,13 +109,33 @@ class Settings:
     co_owners: list[int] = field(default_factory=list)
 
     packages: list[str] = field(default_factory=list)
+    tortoise_models: list[str] = field(default_factory=list)
+    django_apps: list[str] = field(default_factory=list)
 
     # metrics and prometheus
     prometheus_enabled: bool = False
     prometheus_host: str = "0.0.0.0"
     prometheus_port: int = 15260
 
+    spawn_chance_range: tuple[int, int] = (40, 55)
     spawn_manager: str = "ballsdex.packages.countryballs.spawn.SpawnManager"
+
+    # django admin panel
+    webhook_url: str | None = None
+    admin_url: str | None = None
+    client_id: str = ""
+    client_secret: str = ""
+
+    # sentry details
+    sentry_dsn: str = ""
+    sentry_environment: str = "production"
+
+    caught_messages: list[str] = field(default_factory=list)
+    wrong_messages: list[str] = field(default_factory=list)
+    spawn_messages: list[str] = field(default_factory=list)
+    slow_messages: list[str] = field(default_factory=list)
+
+    catch_button_label: str = "Catch me!"
 
 
 settings = Settings()
@@ -120,12 +151,14 @@ def read_settings(path: "Path"):
     settings.team_owners = content.get("owners", {}).get("team-members-are-owners", False)
     settings.co_owners = content.get("owners", {}).get("co-owners", [])
 
-    settings.collectible_name = content["collectible-name"]
+    settings.collectible_name = content["collectible-name"].lower()
     settings.plural_collectible_name = content.get(
         "plural-collectible-name", content["collectible-name"] + "s"
-    )
+    ).lower()
     settings.bot_name = content["bot-name"]
-    settings.players_group_cog_name = content["players-group-cog-name"]
+    settings.players_group_cog_name = content["players-group-cog-name"].lower()
+    settings.favorited_collectible_emoji = content.get("favorited-collectible-emoji", "❤️")
+    settings.show_rarity = content.get("show-rarity", False)
 
     settings.about_description = content["about"]["description"]
     settings.github_link = content["about"]["github-link"]
@@ -133,11 +166,11 @@ def read_settings(path: "Path"):
     settings.terms_of_service = content["about"]["terms-of-service"]
     settings.privacy_policy = content["about"]["privacy-policy"]
     settings.postgres_url = content["postgres_url"]
-    settings.redis_url = content["redis_url"]
 
     settings.admin_guild_ids = content["admin-command"]["guild-ids"] or []
     settings.root_role_ids = content["admin-command"]["root-role-ids"] or []
     settings.admin_role_ids = content["admin-command"]["admin-role-ids"] or []
+    settings.admin_channel_ids = content["admin-command"].get("admin-channel-ids", []) or []
 
     settings.log_channel = content.get("log-channel", None)
 
@@ -158,10 +191,39 @@ def read_settings(path: "Path"):
         "ballsdex.packages.players",
         "ballsdex.packages.trade",
     ]
+    settings.tortoise_models = content.get("extra-tortoise-models") or []
+    settings.django_apps = content.get("extra-django-apps") or []
 
+    spawn_range = content.get("spawn-chance-range", [40, 55])
+    settings.spawn_chance_range = tuple(spawn_range)
     settings.spawn_manager = content.get(
         "spawn-manager", "ballsdex.packages.countryballs.spawn.SpawnManager"
     )
+
+    if admin := content.get("admin-panel"):
+        settings.webhook_url = admin.get("webhook-url")
+        settings.client_id = admin.get("client-id")
+        settings.client_secret = admin.get("client-secret")
+        settings.admin_url = admin.get("url")
+
+    if sentry := content.get("sentry"):
+        settings.sentry_dsn = sentry.get("dsn")
+        settings.sentry_environment = sentry.get("environment")
+
+    if catch := content.get("catch"):
+        settings.spawn_messages = catch.get("spawn_msgs") or ["A wild {collectible} appeared!"]
+        settings.caught_messages = catch.get("caught_msgs") or ["{user} You caught **{ball}**!"]
+        settings.wrong_messages = catch.get("wrong_msgs") or ["{user} Wrong name!"]
+        settings.slow_messages = catch.get("slow_msgs") or [
+            "{user} Sorry, this {collectible} was caught already!"
+        ]
+        settings.catch_button_label = catch.get("catch_button_label", "Catch me!")
+
+    # avoids signaling needed migrations
+    if "makemigrations" in sys.argv or "migrate" in sys.argv:
+        settings.collectible_name = "ball"
+        settings.plural_collectible_name = "balls"
+
     log.info("Settings loaded.")
 
 
@@ -187,15 +249,13 @@ about:
   github-link: https://github.com/laggron42/BallsDex-DiscordBot
 
   # valid invite for a Discord server
-  discord-invite: https://discord.gg/ballsdex  # BallsDex official server
+  discord-invite: https://discord.gg/INVITE_CODE
 
-  terms-of-service: https://gist.github.com/laggron42/52ae099c55c6ee1320a260b0a3ecac4e
-  privacy-policy: https://gist.github.com/laggron42/1eaa122013120cdfcc6d27f9485fe0bf
+  terms-of-service: https://gist.github.com/ # replace with your own link
+  privacy-policy: https://gist.github.com/ # replace with your own link
 
-postgres_url:
+ postgres_url: 
 
-redis_url:
-  
 # WORK IN PROGRESS, DOES NOT FULLY WORK
 # override the name "countryball" in the bot
 collectible-name: countryball
@@ -211,6 +271,9 @@ bot-name: BallsDex
 # players group cog command name
 # this is /balls by default, but you can change it for /animals or /rocks for example
 players-group-cog-name: balls
+
+# emoji used to represent a favorited collectible
+favorited-collectible-emoji: ❤️
 
 # maximum amount of favorites that are allowed
 max-favorites: 50
@@ -240,6 +303,9 @@ admin-command:
   # list of role IDs having partial access to /admin
   admin-role-ids:
 
+  # list of channel IDs where admins can bypass privacy settings, empty means no restriction
+  admin-channel-ids:
+
 # log channel for moderation actions
 log-channel:
 
@@ -251,6 +317,23 @@ owners:
   # a list of IDs that must be considered owners in addition to the application/team owner
   co-owners:
 
+
+# Admin panel related settings
+admin-panel:
+
+    # to enable Discord OAuth2 login, fill this
+    # client ID of the Discord application (not the bot's user ID)
+    client-id: 
+    # client secret of the Discord application (this is not the bot token)
+    client-secret: 
+
+    # to get admin notifications from the admin panel, create a Discord webhook and paste the url
+    webhook-url: 
+
+    # this will provide some hyperlinks to the admin panel when using /admin commands
+    # set to an empty string to disable those links entirely
+    url: http://localhost:8000
+
 # list of packages that will be loaded
 packages:
   - ballsdex.packages.admin
@@ -261,13 +344,64 @@ packages:
   - ballsdex.packages.players
   - ballsdex.packages.trade
 
+# extend the database registered models, useful for 3rd party packages
+extra-tortoise-models:
+
+# extend the Django admin panel with extra apps
+# you can also edit DJANGO_SETTINGS_MODULE for extended configuration
+extra-django-apps:
+
 # prometheus metrics collection, leave disabled if you don't know what this is
 prometheus:
   enabled: false
   host: "0.0.0.0"
-  port: 15260
+  port: 15260 
+
+# spawn chance range
+# with the default spawn manager, this is *approximately* the min/max number of minutes
+# until spawning a countryball, before processing activity
+spawn-chance-range: [40, 55] 
 
 spawn-manager: ballsdex.packages.countryballs.spawn.SpawnManager
+
+# sentry details, leave empty if you don't know what this is
+# https://sentry.io/ for error tracking
+sentry:
+    dsn: ""
+    environment: "production"
+
+catch:
+  # Add messages to each category, one is chosen at random each time.
+
+  # KEYWORDS:
+  # - {user} will mention the user.
+  # - {collectible} is the collectible name.
+  # - {collectibles} is the plural collectible name.
+  # - {ball} is the spawned collectible's name
+  # - {emoji} is the collectible's emoji.
+
+  # the label shown on the catch button
+  catch_button_label: "Catch me!"
+
+  # the message that appears when a user catches a ball 
+  caught_msgs:
+    - "{user} You caught **{ball}**!"
+
+  # the message that appears when a user gets the name wrong
+  # here and only here, you can use {wrong} to show the wrong name that was entered
+  # note that a user can put whatever they want into that field, so be careful
+  wrong_msgs:
+    # - {user} Wrong name! You put: {wrong}
+    - "{user} Wrong name!"
+
+  # the message that appears above the spawn art
+  # {user} is not available here, because who would it ping?
+  spawn_msgs:
+    - "A wild {collectible} appeared!"
+
+  # the message that appears when a user is to slow to catch a ball
+  slow_msgs:
+    - "{user} Sorry, this {collectible} was caught already!"
   """  # noqa: W291
     )
 
@@ -282,7 +416,12 @@ def update_settings(path: "Path"):
     add_max_health = "max-health-bonus" not in content
     add_plural_collectible = "plural-collectible-name" not in content
     add_packages = "packages:" not in content
+    add_spawn_chance_range = "spawn-chance-range" not in content
     add_spawn_manager = "spawn-manager" not in content
+    add_django = "Admin panel related settings" not in content
+    add_sentry = "sentry:" not in content
+    add_catch_messages = "catch:" not in content
+    add_extra_models = "extra-tortoise-models:" not in content
 
     for line in content.splitlines():
         if line.startswith("owners:"):
@@ -344,10 +483,92 @@ packages:
   - ballsdex.packages.trade
 """
 
+    if add_spawn_chance_range:
+        content += """
+# spawn chance range
+# with the default spawn manager, this is *approximately* the min/max number of minutes
+# until spawning a countryball, before processing activity
+spawn-chance-range: [40, 55]
+"""
     if add_spawn_manager:
         content += """
 # define a custom spawn manager implementation
 spawn-manager: ballsdex.packages.countryballs.spawn.SpawnManager
+"""
+
+    if add_django:
+        content += """
+# Admin panel related settings
+admin-panel:
+
+    # to enable Discord OAuth2 login, fill this
+    # client ID of the Discord application (not the bot's user ID)
+    client-id:
+    # client secret of the Discord application (this is not the bot token)
+    client-secret:
+
+    # to get admin notifications from the admin panel, create a Discord webhook and paste the url
+    webhook-url:
+
+    # this will provide some hyperlinks to the admin panel when using /admin commands
+    # set to an empty string to disable those links entirely
+    url: http://localhost:8000
+
+"""
+
+    if add_sentry:
+        content += """
+# sentry details, leave empty if you don't know what this is
+# https://sentry.io/ for error tracking
+sentry:
+    dsn: ""
+    environment: "production"
+"""
+
+    if add_catch_messages:
+        content += """
+catch:
+  # Add messages to each category, one is chosen at random each time.
+
+  # KEYWORDS:
+  # - {user} will mention the user.
+  # - {collectible} is the collectible name.
+  # - {collectibles} is the plural collectible name.
+  # - {ball} is the spawned collectible's name
+  # - {emoji} is the collectible's emoji.
+
+  # the label shown on the catch button
+  catch_button_label: "Catch me!"
+
+  # the message that appears when a user catches a ball
+  caught_msgs:
+    - "{user} You caught **{ball}**!"
+
+  # the message that appears when a user gets the name wrong
+  # here and only here, you can use {wrong} to show the wrong name that was entered
+  # note that a user can put whatever they want into that field, so be careful
+  wrong_msgs:
+    # - {user} Wrong name! You put: {wrong}
+    - "{user} Wrong name!"
+
+  # the message that appears above the spawn art
+  # {user} is not available here, because who would it ping?
+  spawn_msgs:
+    - "A wild {collectible} appeared!"
+
+  # the message that appears when a user is to slow to catch a ball
+  slow_msgs:
+    - "{user} Sorry, this {collectible} was caught already!"
+"""
+
+    if add_extra_models:
+        content += """
+# extend the database registered models, useful for 3rd party packages
+extra-tortoise-models:
+
+# extend the Django admin panel with extra apps
+# you can also edit DJANGO_SETTINGS_MODULE for extended configuration
+extra-django-apps:
 """
 
     if any(
@@ -359,7 +580,12 @@ spawn-manager: ballsdex.packages.countryballs.spawn.SpawnManager
             add_max_health,
             add_plural_collectible,
             add_packages,
+            add_spawn_chance_range,
             add_spawn_manager,
+            add_django,
+            add_sentry,
+            add_catch_messages,
+            add_extra_models,
         )
     ):
         path.write_text(content)

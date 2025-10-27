@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime
 
 import discord
@@ -14,12 +12,13 @@ from ballsdex.core.utils.enums import (
     MENTION_POLICY_MAP,
     PRIVATE_POLICY_MAP,
 )
+from ballsdex.core.utils.enums import TRADE_COOLDOWN_POLICY_MAP as TRADE_POLICY_MAP
 from ballsdex.settings import settings
 
 
 class Info(app_commands.Group):
     """
-    Information commands.
+    Information Commands
     """
 
     @app_commands.command()
@@ -30,7 +29,7 @@ class Info(app_commands.Group):
         days: int = 7,
     ):
         """
-        Show information about the server provided.
+        Show information about the server provided
 
         Parameters
         ----------
@@ -58,8 +57,11 @@ class Info(app_commands.Group):
                 )
                 return
 
+        url = None
         if config := await GuildConfig.get_or_none(guild_id=guild.id):
             spawn_enabled = config.enabled and config.guild_id
+            if settings.admin_url:
+                url = f"{settings.admin_url}/bd_models/guildconfig/{config.pk}/change/"
         else:
             spawn_enabled = False
 
@@ -71,12 +73,14 @@ class Info(app_commands.Group):
             owner = await interaction.client.fetch_user(guild.owner_id)
             embed = discord.Embed(
                 title=f"{guild.name} ({guild.id})",
+                url=url,
                 description=f"**Owner:** {owner} ({guild.owner_id})",
                 color=discord.Color.blurple(),
             )
         else:
             embed = discord.Embed(
                 title=f"{guild.name} ({guild.id})",
+                url=url,
                 color=discord.Color.blurple(),
             )
         embed.add_field(name="Members:", value=guild.member_count)
@@ -103,7 +107,7 @@ class Info(app_commands.Group):
         days: int = 7,
     ):
         """
-        Show information about the user provided.
+        Show information about the user provided
 
         Parameters
         ----------
@@ -117,17 +121,24 @@ class Info(app_commands.Group):
         if not player:
             await interaction.followup.send("The user you gave does not exist.", ephemeral=True)
             return
+        url = (
+            f"{settings.admin_url}/bd_models/player/{player.pk}/change/"
+            if settings.admin_url
+            else None
+        )
         total_user_balls = await BallInstance.filter(
             catch_date__gte=datetime.datetime.now() - datetime.timedelta(days=days),
             player=player,
         )
         embed = discord.Embed(
             title=f"{user} ({user.id})",
+            url=url,
             description=(
                 f"**Privacy Policy:** {PRIVATE_POLICY_MAP[player.privacy_policy]}\n"
                 f"**Donation Policy:** {DONATION_POLICY_MAP[player.donation_policy]}\n"
                 f"**Mention Policy:** {MENTION_POLICY_MAP[player.mention_policy]}\n"
-                f"**Friend Policy:** {FRIEND_POLICY_MAP[player.friend_policy]}"
+                f"**Friend Policy:** {FRIEND_POLICY_MAP[player.friend_policy]}\n"
+                f"**Trade Cooldown Policy:** {TRADE_POLICY_MAP[player.trade_cooldown_policy]}\n"
             ),
             color=discord.Color.blurple(),
         )

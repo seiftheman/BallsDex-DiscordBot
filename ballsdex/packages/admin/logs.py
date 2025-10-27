@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import discord
 from discord import app_commands
 
@@ -9,7 +7,7 @@ from ballsdex.settings import settings
 
 class Logs(app_commands.Group):
     """
-    Bot logs management.
+    Bot logs management
     """
 
     @app_commands.command(name="catchlogs")

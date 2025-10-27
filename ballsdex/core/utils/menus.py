@@ -23,7 +23,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-from __future__ import annotations
 
 import asyncio
 import inspect
@@ -168,7 +167,7 @@ class Button:
         The position the button should have in the initial order.
         Note that since Discord does not actually maintain reaction
         order, this is a best effort attempt to have an order until
-        the user restarts his/her client. Defaults to ``Position(0)``.
+        the user restarts their client. Defaults to ``Position(0)``.
     lock: :class:`bool`
         Whether the button should lock all other buttons from being processed
         until this button is done. Defaults to ``True``.
@@ -217,12 +216,12 @@ class Button:
         else:
             # Unfurl the method to not be bound
             if not isinstance(menu_self, Menu):
-                raise TypeError("Action bound method must be from Menu not %r." % menu_self)
+                raise TypeError("action bound method must be from Menu not %r" % menu_self)
 
             value = value.__func__
 
         if not inspect.iscoroutinefunction(value):
-            raise TypeError("Action must be a coroutine not %r." % value)
+            raise TypeError("action must be a coroutine not %r" % value)
 
         self._action = value
 
@@ -369,7 +368,7 @@ class Menu(metaclass=_MenuMeta):
         self._running = True
         self.message = message
         self.ctx = None
-        self.bot: BallsDexBot = MISSING
+        self.bot: "BallsDexBot" = MISSING
         self._author_id = None
         self._buttons = self.__class__.get_buttons()
         self._lock = asyncio.Lock()
@@ -442,7 +441,7 @@ class Menu(metaclass=_MenuMeta):
                 return wrapped()
 
             async def dummy():
-                raise MenuError("Menu has not been started yet.")
+                raise MenuError("Menu has not been started yet")
 
             return dummy()
 
@@ -489,7 +488,7 @@ class Menu(metaclass=_MenuMeta):
                 return wrapped()
 
             async def dummy():
-                raise MenuError("Menu has not been started yet.")
+                raise MenuError("Menu has not been started yet")
 
             return dummy()
 
@@ -546,7 +545,7 @@ class Menu(metaclass=_MenuMeta):
                 return wrapped()
 
             async def dummy():
-                raise MenuError("Menu has not been started yet.")
+                raise MenuError("Menu has not been started yet")
 
             return dummy()
 
@@ -1001,7 +1000,7 @@ class MenuPages(Menu):
             return {"content": value, "embed": None}
         elif isinstance(value, discord.Embed):
             return {"embed": value, "content": None}
-        raise TypeError("Wrong type from page.")
+        raise TypeError("Wrong type from page")
 
     async def show_page(self, page_number):
         page = await self._source.get_page(page_number)
@@ -1053,17 +1052,17 @@ class MenuPages(Menu):
         skip_if=_skip_double_triangle_buttons,
     )
     async def go_to_first_page(self, payload):
-        """Go to the first page."""
+        """go to the first page"""
         await self.show_page(0)
 
     @button("\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f", position=First(1))
     async def go_to_previous_page(self, payload):
-        """Go to the previous page."""
+        """go to the previous page"""
         await self.show_checked_page(self.current_page - 1)
 
     @button("\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f", position=Last(0))
     async def go_to_next_page(self, payload):
-        """Go to the next page."""
+        """go to the next page"""
         await self.show_checked_page(self.current_page + 1)
 
     @button(
@@ -1072,7 +1071,7 @@ class MenuPages(Menu):
         skip_if=_skip_double_triangle_buttons,
     )
     async def go_to_last_page(self, payload):
-        """Go to the last page."""
+        """go to the last page"""
         # The call here is safe because it's guarded by skip_if
         max_page = self._source.get_max_pages()
         assert max_page
@@ -1208,11 +1207,11 @@ def _aiter(obj, *, _isasync=inspect.iscoroutinefunction):
     try:
         async_iter = cls.__aiter__
     except AttributeError:
-        raise TypeError("{0.__name__!r} object is not an async iterable.".format(cls))
+        raise TypeError("{0.__name__!r} object is not an async iterable".format(cls))
 
     async_iter = async_iter(obj)
     if _isasync(async_iter):
-        raise TypeError("{0.__name__!r} object is not an async iterable.".format(cls))
+        raise TypeError("{0.__name__!r} object is not an async iterable".format(cls))
     return async_iter
 
 
@@ -1275,7 +1274,7 @@ class AsyncIteratorPageSource(PageSource):
 
         entries = self._cache[base:max_base]
         if not entries and max_base > len(self._cache):
-            raise IndexError("Went too far.")
+            raise IndexError("Went too far")
         return entries
 
     async def get_page(self, page_number):
