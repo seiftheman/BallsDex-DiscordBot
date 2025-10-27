@@ -309,7 +309,7 @@ def main():
         db_url = settings.postgres_url
         if not db_url:
             log.error("Database URL not found!")
-            print("[red]You must provide a DB URL with the BALLSDEXBOT_DB_URL env var.[/red]")
+            print("[red]You must provide a database URL inside the config.yml file.[/red]")
             time.sleep(1)
             sys.exit(0)
 
