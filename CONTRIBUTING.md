@@ -5,31 +5,16 @@ a development environment, with some tips on the code structure.
 
 ## Setting up the environment
 
-### PostgreSQL and Redis
-
-Using Docker:
-
-1. Install Docker.
-2. Run `docker compose build` at the root of this repository.
-3. Run `docker compose up -d postgres-db`. This will not start the bot, only the
-   database and redis server.
-
-----
-
-Without docker, check how to install and setup PostgreSQL on your OS.
-Export the appropriate environment variables as described in the
-[README](README.md#without-docker).
-
 ### Installing the dependencies
 
 1. Get Python 3.13 and pip.
-2. Run `python -m venv venv`.
+2. Run `python3 -m venv venv`.
 3. Run `pip install -U -r requirements.txt`.
 
 ### Starting the bot
 
 ```bash
-python -m ballsdex --dev --debug
+python3 -m ballsdex --dev --debug
 ```
 
 You can do `python -m ballsdex -h` to see the available options.

@@ -3,6 +3,8 @@
 # You should copy the production.example.py file as "production.py" and place your settings there
 # That file will not be tracked by git
 
+import dj_database_url
+
 from pathlib import Path
 
 from ballsdex.settings import read_settings, settings
@@ -138,7 +140,7 @@ LOGGING = {
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {"default": settings.postgres_url}
+DATABASES = {"default": dj_database_url.config(settings.postgres_url)}
 
 
 # Password validation
