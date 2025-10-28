@@ -246,7 +246,7 @@ about:
     Collect countryballs on Discord, exchange them and battle with friends!
 
   # override this if you have a fork
-  github-link: https://github.com/laggron42/BallsDex-DiscordBot
+  github-link: https://github.com/seiftheman/BallsDex-DiscordBot
 
   # valid invite for a Discord server
   discord-invite: https://discord.gg/INVITE_CODE
