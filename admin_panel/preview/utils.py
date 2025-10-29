@@ -13,6 +13,7 @@ from ballsdex.core.models import (
     regimes,
     specials,
 )
+from ballsdex.settings import settings
 
 
 async def refresh_cache():
@@ -24,7 +25,7 @@ async def refresh_cache():
     do *not* want caching in the admin panel to happen (since we're actively editing stuff).
     """
     if not Tortoise._inited:
-        await init_tortoise(os.environ["BALLSDEXBOT_DB_URL"], skip_migrations=True)
+        await init_tortoise(settings.postgres_url, skip_migrations=True)
     balls.clear()
     for ball in await Ball.all():
         balls[ball.pk] = ball
